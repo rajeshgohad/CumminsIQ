@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#0A0E1A] text-gray-100 antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-900;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-700 rounded-full;
+  }
+}
+
+@layer utilities {
+  .card {
+    @apply bg-[#111827] border border-gray-800 rounded-xl;
+  }
+  .card-inner {
+    @apply bg-[#1a2235] border border-gray-700/50 rounded-lg;
+  }
+  .status-critical {
+    @apply text-red-400 bg-red-500/10 border-red-500/30;
+  }
+  .status-warning {
+    @apply text-amber-400 bg-amber-500/10 border-amber-500/30;
+  }
+  .status-normal {
+    @apply text-emerald-400 bg-emerald-500/10 border-emerald-500/30;
+  }
+  .status-info {
+    @apply text-blue-400 bg-blue-500/10 border-blue-500/30;
+  }
+}
