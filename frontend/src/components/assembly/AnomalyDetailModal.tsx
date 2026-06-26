@@ -1,6 +1,7 @@
-import { X, Cpu, ChevronDown, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { X, Cpu, ChevronDown, ChevronRight, Sparkles, Loader2 } from 'lucide-react'
+import { useState, useRef } from 'react'
 import type { ActivityLogEntry, Station } from '../../types/assembly'
+import { API_BASE } from '../../lib/api'
 
 interface Props {
   entry: ActivityLogEntry
@@ -387,6 +388,55 @@ export default function AnomalyDetailModal({ entry, stations, onClose }: Props) 
   const reasoning = buildReasoning(entry, stn)
   const rows = sensorRows(stn)
 
+  const [claudeState, setClaudeState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [claudeText, setClaudeText] = useState('')
+  const claudeRef = useRef<HTMLDivElement>(null)
+
+  async function askClaude() {
+    setClaudeState('loading')
+    setClaudeText('')
+    try {
+      const historyRes = await fetch(`${API_BASE}/api/station-history/${entry.station}?hours=1`)
+      const history = historyRes.ok ? await historyRes.json() : []
+
+      const res = await fetch(`${API_BASE}/api/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ station: stn, history, agent_type: entry.from_agent }),
+      })
+      if (!res.ok) throw new Error('API error')
+
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const payload = line.slice(6)
+          if (payload === '[DONE]') { setClaudeState('done'); break }
+          try {
+            const parsed = JSON.parse(payload)
+            if (parsed.error) throw new Error(parsed.error)
+            if (parsed.text) {
+              setClaudeText(t => t + parsed.text)
+              setTimeout(() => claudeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50)
+            }
+          } catch { /* ignore malformed chunk */ }
+        }
+      }
+      setClaudeState('done')
+    } catch (e) {
+      setClaudeState('error')
+      setClaudeText(String(e))
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -509,6 +559,32 @@ export default function AnomalyDetailModal({ entry, stations, onClose }: Props) 
             </div>
           </Section>
 
+          {/* ── Claude live analysis ─────────────────────────────────────────── */}
+          {claudeState !== 'idle' && (
+            <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-violet-500/20 bg-violet-500/8">
+                <Sparkles size={12} className="text-violet-400" />
+                <span className="text-[11px] font-semibold text-violet-300">Claude Live Analysis</span>
+                {claudeState === 'loading' && (
+                  <Loader2 size={11} className="text-violet-400 animate-spin ml-auto" />
+                )}
+                {claudeState === 'done' && (
+                  <span className="ml-auto text-[9px] text-violet-500 font-mono">claude-sonnet-4-6 · streaming complete</span>
+                )}
+              </div>
+              <div className="px-4 py-3">
+                {claudeState === 'loading' && claudeText === '' && (
+                  <p className="text-[10px] text-violet-400 animate-pulse">Sending sensor data to Claude...</p>
+                )}
+                <p className="text-[11px] text-gray-200 leading-relaxed whitespace-pre-wrap font-mono">{claudeText}</p>
+                {claudeState === 'error' && (
+                  <p className="text-[10px] text-red-400 mt-1">Error: {claudeText}</p>
+                )}
+                <div ref={claudeRef} />
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* Footer */}
@@ -516,9 +592,20 @@ export default function AnomalyDetailModal({ entry, stations, onClose }: Props) 
           <span className="text-[9px] font-mono text-gray-600">
             Event #{entry.id} · {new Date(entry.timestamp * 1000).toLocaleTimeString()}
           </span>
-          <button onClick={onClose} className="text-[11px] text-gray-400 hover:text-white px-4 py-1.5 rounded-lg border border-white/10 hover:border-white/20 transition-all">
-            Close
-          </button>
+          <div className="flex items-center gap-2">
+            {stn && claudeState !== 'loading' && (
+              <button
+                onClick={askClaude}
+                className="flex items-center gap-1.5 text-[11px] font-semibold text-violet-300 hover:text-white px-3 py-1.5 rounded-lg border border-violet-500/40 hover:border-violet-400/60 bg-violet-500/10 hover:bg-violet-500/20 transition-all"
+              >
+                <Sparkles size={11} />
+                {claudeState === 'idle' ? 'Ask Claude' : 'Ask Again'}
+              </button>
+            )}
+            <button onClick={onClose} className="text-[11px] text-gray-400 hover:text-white px-4 py-1.5 rounded-lg border border-white/10 hover:border-white/20 transition-all">
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
