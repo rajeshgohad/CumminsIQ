@@ -9,9 +9,9 @@ import AnomalyDetailModal from '../components/assembly/AnomalyDetailModal'
 import type { Page } from '../components/Header'
 import type { ActivityLogEntry } from '../types/assembly'
 
-interface Props { onPageChange: (p: Page) => void }
+interface Props { onPageChange: (p: Page) => void; apiKey: string }
 
-export default function AssemblyLineDashboard({ onPageChange }: Props) {
+export default function AssemblyLineDashboard({ onPageChange, apiKey }: Props) {
   const { data, connectionState } = useAssemblySocket()
   const [selectedEntry, setSelectedEntry] = useState<ActivityLogEntry | null>(null)
 
@@ -57,6 +57,7 @@ export default function AssemblyLineDashboard({ onPageChange }: Props) {
         <AnomalyDetailModal
           entry={selectedEntry}
           stations={data.stations}
+          apiKey={apiKey}
           onClose={() => setSelectedEntry(null)}
         />
       )}

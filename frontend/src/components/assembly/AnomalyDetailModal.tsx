@@ -7,6 +7,7 @@ interface Props {
   entry: ActivityLogEntry
   stations: Station[]
   onClose: () => void
+  apiKey: string
 }
 
 // ── Per-agent model config ────────────────────────────────────────────────────
@@ -382,7 +383,7 @@ const STEP_COLORS = ['text-blue-400 bg-blue-500/10 border-blue-500/20',
   'text-amber-400 bg-amber-500/10 border-amber-500/20',
   'text-green-400 bg-green-500/10 border-green-500/20']
 
-export default function AnomalyDetailModal({ entry, stations, onClose }: Props) {
+export default function AnomalyDetailModal({ entry, stations, onClose, apiKey }: Props) {
   const stn = stations.find(s => s.code === entry.station) ?? null
   const agentMeta = AGENT_MODEL[entry.from_agent] ?? AGENT_MODEL.supervisor
   const reasoning = buildReasoning(entry, stn)
@@ -402,7 +403,7 @@ export default function AnomalyDetailModal({ entry, stations, onClose }: Props) 
       const res = await fetch(`${API_BASE}/api/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ station: stn, history, agent_type: entry.from_agent }),
+        body: JSON.stringify({ station: stn, history, agent_type: entry.from_agent, api_key: apiKey }),
       })
       if (!res.ok) throw new Error('API error')
 
@@ -596,10 +597,18 @@ export default function AnomalyDetailModal({ entry, stations, onClose }: Props) 
             {stn && claudeState !== 'loading' && (
               <button
                 onClick={askClaude}
-                className="flex items-center gap-1.5 text-[11px] font-semibold text-violet-300 hover:text-white px-3 py-1.5 rounded-lg border border-violet-500/40 hover:border-violet-400/60 bg-violet-500/10 hover:bg-violet-500/20 transition-all"
+                disabled={!apiKey}
+                title={!apiKey ? 'Set your Anthropic API key (top right) to enable' : undefined}
+                className={`flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-all ${
+                  apiKey
+                    ? 'text-violet-300 hover:text-white border-violet-500/40 hover:border-violet-400/60 bg-violet-500/10 hover:bg-violet-500/20'
+                    : 'text-gray-600 border-white/8 bg-white/3 cursor-not-allowed'
+                }`}
               >
                 <Sparkles size={11} />
-                {claudeState === 'idle' ? 'Ask Claude' : 'Ask Again'}
+                {claudeState === 'idle'
+                  ? (apiKey ? 'Ask Claude' : 'Ask Claude (set API key ↗)')
+                  : 'Ask Again'}
               </button>
             )}
             <button onClick={onClose} className="text-[11px] text-gray-400 hover:text-white px-4 py-1.5 rounded-lg border border-white/10 hover:border-white/20 transition-all">

@@ -10,6 +10,7 @@ import { useWebSocket } from './hooks/useWebSocket'
 
 export default function App() {
   const [activePage, setActivePage] = useState<Page>('executive')
+  const [apiKey, setApiKey] = useState('')
   const { data, connectionState } = useWebSocket()
 
   return (
@@ -19,6 +20,8 @@ export default function App() {
         lastUpdated={data?.timestamp ?? null}
         activePage={activePage}
         onPageChange={setActivePage}
+        apiKey={apiKey}
+        onApiKeyChange={setApiKey}
       />
 
       {activePage === 'executive' && (
@@ -35,7 +38,7 @@ export default function App() {
         )
       )}
 
-      {activePage === 'assembly'    && <AssemblyLineDashboard onPageChange={setActivePage} />}
+      {activePage === 'assembly'    && <AssemblyLineDashboard onPageChange={setActivePage} apiKey={apiKey} />}
       {activePage === 'cycle_time'  && <CycleTimeAgentPage />}
       {activePage === 'maintenance' && <PredictiveMaintenancePage />}
       {activePage === 'vision'      && <VisionInspectionPage />}

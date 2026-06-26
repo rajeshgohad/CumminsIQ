@@ -27,7 +27,6 @@ app.add_middleware(
 
 engine   = SimulationEngine()
 assembly = AssemblySimulator()
-anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
 
 exec_clients:     list[WebSocket] = []
 assembly_clients: list[WebSocket] = []
@@ -64,6 +63,12 @@ def get_agent_events(limit: int = Query(100, le=500)):
 
 @app.post("/api/analyze")
 async def analyze_anomaly(data: dict):
+    api_key = data.get("api_key") or os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        async def err():
+            yield f"data: {json.dumps({'error': 'No API key provided. Set your key using the top-right button.'})}\n\n"
+        return StreamingResponse(err(), media_type="text/event-stream")
+
     station   = data.get("station", {})
     history   = data.get("history", [])
     agent_type = data.get("agent_type", "equipment")
@@ -113,9 +118,11 @@ async def analyze_anomaly(data: dict):
         "what is actually happening at this station? What should the plant engineer do right now?"
     )
 
+    client = anthropic.Anthropic(api_key=api_key)
+
     async def stream_claude():
         try:
-            with anthropic_client.messages.stream(
+            with client.messages.stream(
                 model="claude-sonnet-4-6",
                 max_tokens=600,
                 system=system_prompt,

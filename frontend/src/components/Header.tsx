@@ -1,5 +1,6 @@
 import { Wifi, WifiOff, Loader2, RefreshCw, LayoutDashboard, Factory, Timer, Wrench, ScanEye } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import ApiKeyButton from './ApiKeyButton'
 
 export type Page = 'executive' | 'assembly' | 'cycle_time' | 'maintenance' | 'vision'
 
@@ -8,6 +9,8 @@ interface HeaderProps {
   lastUpdated: number | null
   activePage: Page
   onPageChange: (p: Page) => void
+  apiKey: string
+  onApiKeyChange: (k: string) => void
 }
 
 const PAGES: { id: Page; label: string; icon: React.ElementType }[] = [
@@ -18,7 +21,7 @@ const PAGES: { id: Page; label: string; icon: React.ElementType }[] = [
   { id: 'vision',      label: 'Vision Inspection',   icon: ScanEye },
 ]
 
-export default function Header({ connectionState, lastUpdated, activePage, onPageChange }: HeaderProps) {
+export default function Header({ connectionState, lastUpdated, activePage, onPageChange, apiKey, onApiKeyChange }: HeaderProps) {
   const [now, setNow] = useState(new Date())
 
   useEffect(() => {
@@ -74,6 +77,8 @@ export default function Header({ connectionState, lastUpdated, activePage, onPag
               {now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
           </div>
+
+          <ApiKeyButton apiKey={apiKey} onChange={onApiKeyChange} />
 
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium ${
             connectionState === 'connected'
