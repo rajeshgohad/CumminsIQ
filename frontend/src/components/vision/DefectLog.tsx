@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, XCircle, ScanSearch } from 'lucide-react'
 
-interface LogEntry {
+export interface LogEntry {
   id: number
   ts: number
   station: string
@@ -9,6 +9,10 @@ interface LogEntry {
   result: 'pass' | 'fail'
   detail: string
   confidence: number
+}
+
+interface Props {
+  onDefectClick?: (entry: LogEntry) => void
 }
 
 const FAIL_DETAILS = [
@@ -22,11 +26,10 @@ const FAIL_DETAILS = [
 
 let _logId = 0
 
-export default function DefectLog() {
+export default function DefectLog({ onDefectClick }: Props) {
   const [entries, setEntries] = useState<LogEntry[]>([])
 
   useEffect(() => {
-    // Seed with a few historical entries
     const seed: LogEntry[] = [
       { id: ++_logId, ts: Date.now() / 1000 - 280, station: 'STN-03 · Piston & Con-Rod', check: 'Ring End Gap',   result: 'fail', detail: 'Gap 0.51mm exceeds 0.40mm limit', confidence: 94 },
       { id: ++_logId, ts: Date.now() / 1000 - 195, station: 'STN-09 · ECM & Electrical', check: 'Pin Inspection', result: 'fail', detail: 'Bent pin P31 — deflection 22°', confidence: 97 },
@@ -90,6 +93,15 @@ export default function DefectLog() {
               </div>
               <p className="text-[10px] font-semibold text-white mb-0.5">{e.check}</p>
               <p className="text-[9px] text-gray-500 leading-relaxed">{e.detail}</p>
+              {e.result === 'fail' && onDefectClick && (
+                <button
+                  onClick={() => onDefectClick(e)}
+                  className="mt-1.5 flex items-center gap-1 text-[9px] font-semibold text-teal-400 hover:text-white border border-teal-500/30 bg-teal-500/8 hover:bg-teal-500/20 rounded px-2 py-0.5 transition-all"
+                >
+                  <ScanSearch size={9} />
+                  Investigate with AI Agent
+                </button>
+              )}
             </div>
             <span className="text-[9px] text-gray-600 flex-shrink-0">{timeAgo(e.ts)}</span>
           </div>

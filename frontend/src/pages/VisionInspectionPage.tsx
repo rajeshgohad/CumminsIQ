@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
-import { ScanEye, CheckCircle2, XCircle, Activity, Layers } from 'lucide-react'
+import { ScanEye, Layers } from 'lucide-react'
 import CameraFeed from '../components/vision/CameraFeed'
 import DefectLog from '../components/vision/DefectLog'
+import QualityAgentModal from '../components/vision/QualityAgentModal'
 import { INSPECTIONS } from '../components/vision/InspectionScenes'
-import type { ActivityLogEntry, Agent } from '../types/assembly'
+import type { ActivityLogEntry } from '../types/assembly'
+import type { LogEntry } from '../components/vision/DefectLog'
 import { useAssemblySocket } from '../hooks/useAssemblySocket'
+
+interface Props { apiKey: string }
 
 function KpiTile({ label, value, sub, color }: { label: string; value: string | number; sub: string; color: string }) {
   return (
@@ -39,13 +43,13 @@ function AgentStatus({ log }: { log: ActivityLogEntry[] }) {
   )
 }
 
-export default function VisionInspectionPage() {
+export default function VisionInspectionPage({ apiKey }: Props) {
   const { data } = useAssemblySocket()
   const [inspectedToday, setInspectedToday] = useState(1847)
   const [defectsFound, setDefectsFound]     = useState(23)
   const [passRate, setPassRate]             = useState(98.8)
+  const [activeDefect, setActiveDefect]     = useState<LogEntry | null>(null)
 
-  // Slowly update KPIs to look live
   useEffect(() => {
     const t = setInterval(() => {
       setInspectedToday(p => p + Math.floor(Math.random() * 3))
@@ -60,6 +64,7 @@ export default function VisionInspectionPage() {
   const log: ActivityLogEntry[] = data?.activity_log ?? []
 
   return (
+    <>
     <div className="flex-1 flex flex-col gap-4 p-4 overflow-hidden">
       {/* KPI row */}
       <div className="grid grid-cols-4 gap-4">
@@ -89,10 +94,19 @@ export default function VisionInspectionPage() {
         <div className="w-80 flex-shrink-0 flex flex-col gap-3">
           <AgentStatus log={log} />
           <div className="card rounded-xl p-4 flex-1 overflow-hidden flex flex-col min-h-0">
-            <DefectLog />
+            <DefectLog onDefectClick={apiKey ? setActiveDefect : undefined} />
           </div>
         </div>
       </div>
     </div>
+
+    {activeDefect && apiKey && (
+      <QualityAgentModal
+        defect={activeDefect}
+        apiKey={apiKey}
+        onClose={() => setActiveDefect(null)}
+      />
+    )}
+    </>
   )
 }
