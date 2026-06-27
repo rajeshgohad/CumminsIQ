@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react'
-import { AlertOctagon, TrendingUp, Database } from 'lucide-react'
+import { AlertOctagon, TrendingUp, Database, ScanSearch } from 'lucide-react'
 import { API_BASE } from '../../lib/api'
 import { LineChart, Line, ResponsiveContainer, ReferenceLine, Tooltip, YAxis } from 'recharts'
 import type { Station } from '../../types/assembly'
 
-interface Props { bottleneck: Station | null; stations: Station[] }
+interface Props {
+  bottleneck: Station | null
+  stations: Station[]
+  apiKey?: string
+  onInvestigate?: () => void
+}
 
 interface HistoryPoint { ts: number; actual_ct: number; status: string }
 
@@ -27,7 +32,7 @@ function fmtTime(ts: number) {
   return new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export default function BottleneckDetail({ bottleneck, stations }: Props) {
+export default function BottleneckDetail({ bottleneck, stations, apiKey, onInvestigate }: Props) {
   const [history, setHistory] = useState<HistoryPoint[]>([])
 
   useEffect(() => {
@@ -60,6 +65,15 @@ export default function BottleneckDetail({ bottleneck, stations }: Props) {
         <span className="ml-auto text-[10px] font-mono text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full animate-pulse">
           ACTIVE BOTTLENECK
         </span>
+        {apiKey && onInvestigate && (
+          <button
+            onClick={onInvestigate}
+            className="flex items-center gap-1 text-[9px] font-semibold text-orange-400 hover:text-white border border-orange-500/30 bg-orange-500/8 hover:bg-orange-500/20 rounded px-2 py-0.5 transition-all"
+          >
+            <ScanSearch size={9} />
+            Investigate with AI Agent
+          </button>
+        )}
       </div>
 
       {/* Main bottleneck highlight */}

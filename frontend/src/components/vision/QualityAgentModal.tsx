@@ -73,7 +73,7 @@ export default function QualityAgentModal({ defect, apiKey, onClose }: Props) {
       const code = stationCode(defect.station)
       try {
         const res = await fetch(
-          `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/api/quality-agent`,
+          '/api/quality-agent',
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

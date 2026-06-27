@@ -39,7 +39,7 @@ export default function App() {
       )}
 
       {activePage === 'assembly'    && <AssemblyLineDashboard onPageChange={setActivePage} apiKey={apiKey} />}
-      {activePage === 'cycle_time'  && <CycleTimeAgentPage />}
+      {activePage === 'cycle_time'  && <CycleTimeAgentPage apiKey={apiKey} />}
       {activePage === 'maintenance' && <PredictiveMaintenancePage apiKey={apiKey} />}
       {activePage === 'vision'      && <VisionInspectionPage apiKey={apiKey} />}
     </div>

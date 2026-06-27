@@ -17,3 +17,11 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Keys & secrets
+*.pem
+*.key
+
+# IDE / tooling
+.claude/
+.vscode/

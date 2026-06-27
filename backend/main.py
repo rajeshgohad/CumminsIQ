@@ -12,6 +12,7 @@ import database as db
 import anthropic
 from pm_agent_tools import run_pm_agent, init_pm_tables
 from quality_agent_tools import run_quality_agent, init_quality_tables
+from cycle_time_agent_tools import run_cycle_time_agent, init_ct_tables
 
 app = FastAPI(title="CumminsIQ API")
 
@@ -268,9 +269,30 @@ async def quality_agent_endpoint(data: dict):
     )
 
 
+@app.post("/api/cycle-time-agent")
+async def cycle_time_agent_endpoint(data: dict):
+    api_key = data.get("api_key") or os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        async def err():
+            yield f"data: {json.dumps({'type': 'error', 'text': 'No API key provided.'})}\n\n"
+        return StreamingResponse(err(), media_type="text/event-stream")
+
+    machine   = data.get("machine",   "MILL-04")
+    operation = data.get("operation", "Op60")
+    station   = data.get("station",   "STN-06")
+    actual_ct = int(data.get("actual_ct",  847))
+    target_ct = int(data.get("target_ct",  720))
+
+    return StreamingResponse(
+        run_cycle_time_agent(machine, operation, station, actual_ct, target_ct, api_key),
+        media_type="text/event-stream"
+    )
+
+
 @app.on_event("startup")
 async def startup():
     db.init_db()
     init_pm_tables()
     init_quality_tables()
+    init_ct_tables()
     asyncio.create_task(broadcast_loop())
