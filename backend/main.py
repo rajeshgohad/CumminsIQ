@@ -11,6 +11,7 @@ from config import TICK_INTERVAL
 import database as db
 import anthropic
 from pm_agent_tools import run_pm_agent, init_pm_tables
+from quality_agent_tools import run_quality_agent, init_quality_tables
 
 app = FastAPI(title="CumminsIQ API")
 
@@ -225,8 +226,28 @@ async def pm_agent_endpoint(data: dict):
     )
 
 
+@app.post("/api/quality-agent")
+async def quality_agent_endpoint(data: dict):
+    api_key = data.get("api_key") or os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        async def err():
+            yield f"data: {json.dumps({'type': 'error', 'text': 'No API key provided.'})}\n\n"
+        return StreamingResponse(err(), media_type="text/event-stream")
+
+    station    = data.get("station", "STN-03")
+    defect_type = data.get("defect_type", "Ring End Gap")
+    detail     = data.get("detail", "Defect detected")
+    confidence = float(data.get("confidence", 94))
+
+    return StreamingResponse(
+        run_quality_agent(station, defect_type, detail, confidence, api_key),
+        media_type="text/event-stream"
+    )
+
+
 @app.on_event("startup")
 async def startup():
     db.init_db()
     init_pm_tables()
+    init_quality_tables()
     asyncio.create_task(broadcast_loop())
