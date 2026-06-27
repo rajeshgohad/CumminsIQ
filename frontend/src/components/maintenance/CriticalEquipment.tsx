@@ -1,7 +1,7 @@
-import { AlertTriangle, TrendingDown } from 'lucide-react'
+import { AlertTriangle, TrendingDown, Brain } from 'lucide-react'
 import type { Station } from '../../types/assembly'
 
-interface Props { stations: Station[] }
+interface Props { stations: Station[]; onRunPMAgent: (s: Station) => void }
 
 function healthScore(s: Station): number {
   const tempPenalty = Math.max(0, (s.machine_temp - 68) * 1.8)
@@ -21,7 +21,7 @@ function primaryRisk(s: Station): string {
   return 'General wear — multiple parameters elevated'
 }
 
-export default function CriticalEquipment({ stations }: Props) {
+export default function CriticalEquipment({ stations, onRunPMAgent }: Props) {
   const critical = [...stations]
     .map(s => ({ ...s, score: healthScore(s) }))
     .sort((a, b) => a.score - b.score)
@@ -75,10 +75,19 @@ export default function CriticalEquipment({ stations }: Props) {
               </div>
 
               {/* Primary risk */}
-              <div className="bg-white/4 rounded-lg p-1.5">
+              <div className="bg-white/4 rounded-lg p-1.5 mb-2">
                 <p className="text-[9px] text-gray-500 mb-0.5">Primary Risk</p>
                 <p className="text-[10px] text-gray-300 leading-snug">{primaryRisk(s)}</p>
               </div>
+
+              {/* PM Agent button */}
+              <button
+                onClick={() => onRunPMAgent(s)}
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-orange-500/30 bg-orange-500/8 text-orange-400 hover:bg-orange-500/15 hover:text-white transition-all text-[10px] font-semibold"
+              >
+                <Brain size={10} />
+                Run PM Agent
+              </button>
             </div>
           )
         })}

@@ -6,6 +6,7 @@ import AssemblyLine from '../components/assembly/AssemblyLine'
 import AgentPanel from '../components/assembly/AgentPanel'
 import AgentActivityLog from '../components/assembly/AgentActivityLog'
 import AnomalyDetailModal from '../components/assembly/AnomalyDetailModal'
+import ShiftImpactBar from '../components/assembly/ShiftImpactBar'
 import type { Page } from '../components/Header'
 import type { ActivityLogEntry } from '../types/assembly'
 
@@ -30,6 +31,9 @@ export default function AssemblyLineDashboard({ onPageChange, apiKey }: Props) {
   return (
     <>
       <div className="flex-1 flex flex-col gap-4 p-4 overflow-hidden">
+        {/* Shift impact */}
+        <ShiftImpactBar />
+
         {/* KPI row */}
         <LineMetrics line={data.line} stations={data.stations} />
 

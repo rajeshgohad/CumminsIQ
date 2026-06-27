@@ -1,8 +1,13 @@
+import { useState } from 'react'
 import { Loader2, ShieldCheck, AlertTriangle, ClipboardList, TrendingDown } from 'lucide-react'
 import { useAssemblySocket } from '../hooks/useAssemblySocket'
 import HealthGrid from '../components/maintenance/HealthGrid'
 import CriticalEquipment from '../components/maintenance/CriticalEquipment'
 import WorkOrders from '../components/maintenance/WorkOrders'
+import PMAgentModal from '../components/maintenance/PMAgentModal'
+import type { Station } from '../types/assembly'
+
+interface Props { apiKey: string }
 
 function healthScore(s: { machine_temp: number; vibration: number; tool_life_pct: number }): number {
   const t = Math.max(0, (s.machine_temp - 68) * 1.8)
@@ -11,8 +16,9 @@ function healthScore(s: { machine_temp: number; vibration: number; tool_life_pct
   return Math.max(0, Math.min(100, 100 - t - v - l))
 }
 
-export default function PredictiveMaintenancePage() {
+export default function PredictiveMaintenancePage({ apiKey }: Props) {
   const { data } = useAssemblySocket()
+  const [pmStation, setPmStation] = useState<Station | null>(null)
 
   if (!data) {
     return (
@@ -29,6 +35,7 @@ export default function PredictiveMaintenancePage() {
   const woCount  = data.activity_log.filter(e => e.from_agent === 'maintenance' && e.type === 'act').length
 
   return (
+    <>
     <div className="flex-1 flex flex-col gap-4 p-4 overflow-y-auto">
       {/* Header metrics */}
       <div className="grid grid-cols-4 gap-3">
@@ -80,8 +87,17 @@ export default function PredictiveMaintenancePage() {
 
       {/* Critical equipment ranking */}
       <div className="card rounded-xl p-4">
-        <CriticalEquipment stations={data.stations} />
+        <CriticalEquipment stations={data.stations} onRunPMAgent={setPmStation} />
       </div>
     </div>
+
+    {pmStation && (
+      <PMAgentModal
+        station={pmStation}
+        apiKey={apiKey}
+        onClose={() => setPmStation(null)}
+      />
+    )}
+  </>
   )
 }

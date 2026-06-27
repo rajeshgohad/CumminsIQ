@@ -10,6 +10,7 @@ from assembly_simulator import AssemblySimulator
 from config import TICK_INTERVAL
 import database as db
 import anthropic
+from pm_agent_tools import run_pm_agent, init_pm_tables
 
 app = FastAPI(title="CumminsIQ API")
 
@@ -206,7 +207,26 @@ async def broadcast_loop():
             assembly_clients.remove(ws)
 
 
+@app.post("/api/pm-agent")
+async def pm_agent_endpoint(data: dict):
+    api_key = data.get("api_key") or os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        async def err():
+            yield f"data: {json.dumps({'type': 'error', 'text': 'No API key provided.'})}\n\n"
+        return StreamingResponse(err(), media_type="text/event-stream")
+
+    asset_id        = data.get("asset_id", "STN-01")
+    fault_type      = data.get("fault_type", "bearing_wear")
+    sensor_readings = data.get("sensor_readings", {})
+
+    return StreamingResponse(
+        run_pm_agent(asset_id, fault_type, sensor_readings, api_key),
+        media_type="text/event-stream"
+    )
+
+
 @app.on_event("startup")
 async def startup():
     db.init_db()
+    init_pm_tables()
     asyncio.create_task(broadcast_loop())

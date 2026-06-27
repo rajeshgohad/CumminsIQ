@@ -85,7 +85,7 @@ export default function WorkOrders({ log, agent }: Props) {
   const merged = [
     ...dbWOs,
     ...sessionWOs.filter(w => !dbNums.has(w.wo_number)),
-  ].sort((a, b) => b.created_at - a.created_at).slice(0, 20)
+  ].sort((a, b) => b.created_at - a.created_at).slice(0, 4)
 
   return (
     <div className="flex flex-col gap-3 h-full">
@@ -139,7 +139,7 @@ export default function WorkOrders({ log, agent }: Props) {
                   {wo.priority}
                 </span>
                 {wo.source === 'db' && (
-                  <Database size={8} className="text-teal-400 flex-shrink-0" title="Persisted to DB" />
+                  <Database size={8} className="text-teal-400 flex-shrink-0" aria-label="Persisted to DB" />
                 )}
                 <StatusIcon size={10} className={`ml-auto ${STATUS_COLOR[wo.wo_status]}`} />
               </div>
