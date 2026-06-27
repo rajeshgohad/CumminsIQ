@@ -139,6 +139,29 @@ async def analyze_anomaly(data: dict):
     return StreamingResponse(stream_claude(), media_type="text/event-stream")
 
 
+@app.get("/api/tables")
+def list_tables():
+    conn = db.get_conn()
+    tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()]
+    result = {}
+    for t in tables:
+        count = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+        result[t] = count
+    return {"tables": tables, "row_counts": result}
+
+
+@app.get("/api/tables/{table_name}")
+def get_table(table_name: str, limit: int = Query(100, le=500)):
+    conn = db.get_conn()
+    valid = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+    if table_name not in valid:
+        return {"error": f"Table '{table_name}' not found", "available": valid}
+    rows = conn.execute(f"SELECT * FROM {table_name} LIMIT ?", (limit,)).fetchall()
+    cols = [d[0] for d in conn.execute(f"SELECT * FROM {table_name} LIMIT 0").description or []]
+    return {"table": table_name, "count": len(rows), "columns": cols,
+            "rows": [dict(zip(cols, r)) for r in rows]}
+
+
 @app.get("/api/db-stats")
 def db_stats():
     conn = db.get_conn()
