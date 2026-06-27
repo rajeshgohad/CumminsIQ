@@ -589,199 +589,283 @@ def init_quality_tables():
 
 
 def _seed_quality_data(conn):
-    if conn.execute("SELECT COUNT(*) FROM qa_engines").fetchone()[0] > 0:
+    if conn.execute("SELECT COUNT(*) FROM qa_engines").fetchone()[0] >= 50:
         return
+
+    import random as _rnd
+    _rnd.seed(42)
+
+    # Clear existing seed data (preserve agent-written action tables)
+    for t in ['qa_engines','qa_inspection_results','qa_spc_data','qa_test_results',
+              'qa_visual_log','qa_gauge_calibration','qa_material_lots','qa_engine_locations',
+              'qa_shipments','qa_process_params','qa_tooling_history','qa_material_certs',
+              'qa_operator_log','qa_machine_maintenance','qa_drawings','qa_failure_kg',
+              'qa_similar_components']:
+        conn.execute(f"DELETE FROM {t}")
 
     now = int(time.time())
 
-    # Engines
-    engines = [
-        ("ENG-2847-001", "ISX15", now - 8*3600, "STN-03 Piston & Con-Rod", "in-process"),
-        ("ENG-2847-002", "ISX15", now - 7*3600, "STN-04 Cylinder Head",    "in-process"),
-        ("ENG-2847-003", "ISX15", now - 6*3600, "STN-05 Oil System",       "in-process"),
-        ("ENG-2847-004", "ISX15", now - 5*3600, "Test Cell 1",             "in-test"),
-        ("ENG-2847-005", "ISX15", now - 4*3600, "Shipping Hold",           "shipping-hold"),
-        ("ENG-2847-006", "ISX15", now - 3*86400,"SHIPPED",                 "shipped"),
-        ("ENG-2847-007", "ISX15", now - 2*3600, "STN-03 Piston & Con-Rod", "in-process"),
-        ("ENG-2847-008", "ISX15", now - 1*3600, "STN-02 Crankshaft",      "in-process"),
+    DAY = 86400
+    STATIONS = [
+        ('STN-01','Cylinder Block Prep'),  ('STN-02','Crankshaft Install'),
+        ('STN-03','Piston & Con-Rod'),     ('STN-04','Cylinder Head'),
+        ('STN-05','Head Torque'),          ('STN-06','Fuel System'),
+        ('STN-07','Turbo Install'),        ('STN-08','Cooling System'),
+        ('STN-09','ECM & Electrical'),     ('STN-10','Final Assembly'),
+        ('STN-11','Leak Test'),            ('STN-12','Paint & Pack'),
     ]
-    conn.executemany(
-        "INSERT OR IGNORE INTO qa_engines(serial_number,product_type,build_date,current_op,status) VALUES(?,?,?,?,?)",
-        engines
-    )
+    # (feature, nominal, usl, lsl, unit)
+    FEATURES = {
+        'STN-01': [('Surface Finish',1.0,1.5,0.5,'μm'),('Bore Roundness',0.008,0.015,0.0,'mm'),('Deck Flatness',0.02,0.05,0.0,'mm')],
+        'STN-02': [('Crank Runout',0.02,0.05,0.0,'mm'),('Journal Diameter',90.01,90.02,90.00,'mm')],
+        'STN-03': [('Ring End Gap',0.30,0.40,0.20,'mm'),('Pin Clearance',0.018,0.025,0.010,'mm')],
+        'STN-04': [('Valve Clearance Intake',0.30,0.35,0.25,'mm'),('Head Flatness',0.02,0.05,0.0,'mm')],
+        'STN-05': [('Bolt Torque Angle',90.0,95.0,85.0,'deg'),('Gasket Seating',1.0,1.0,1.0,'PASS/FAIL')],
+        'STN-06': [('Injector Flow Rate',900.0,950.0,850.0,'ml/min')],
+        'STN-07': [('Turbo Shaft Play',0.11,0.15,0.08,'mm')],
+        'STN-08': [('Water Pump Flow',100.0,120.0,80.0,'L/min')],
+        'STN-09': [('Pin Inspection',50.0,50.0,50.0,'count'),('ECM Voltage',13.2,14.5,12.0,'V')],
+        'STN-10': [('Engine Weight',950.0,975.0,925.0,'kg')],
+        'STN-11': [('Combustion Leakage',0.5,2.0,0.0,'bar/min'),('Oil Leakage',0.1,0.5,0.0,'bar/min')],
+        'STN-12': [('Cosmetic Check',1.0,1.0,1.0,'PASS/FAIL')],
+    }
+    CUSTOMERS  = ['Fleet Solutions Inc','Peterbilt Motors','Kenworth Truck Co',
+                  'Volvo Trucks NA','Freightliner LLC','Navistar Inc']
+    OPERATORS  = ['Sarah Johnson','Mike Thornton','Lisa Chen','David Kumar','Tom Wilson','Ana Martinez']
+    INSPECTORS = ['Vision-AI','CMM-01','CMM-02','Gauge-Set-A','Manual-QC']
 
-    # Engine locations
-    locations = [
-        ("ENG-2847-001", "in-process",     "STN-03 · Piston & Con-Rod Assy",  now),
-        ("ENG-2847-002", "in-process",     "STN-04 · Cylinder Head Torque",   now),
-        ("ENG-2847-003", "in-process",     "STN-05 · Oil System & Sump",      now),
-        ("ENG-2847-004", "test-cell",      "Test Cell 1 · Performance Test",  now),
-        ("ENG-2847-005", "shipping-hold",  "Shipping Bay 3 · Awaiting QA",    now),
-        ("ENG-2847-006", "shipped",        "Fleet Solutions Inc · Chicago IL", now - 3*86400),
-        ("ENG-2847-007", "in-process",     "STN-03 · Piston & Con-Rod Assy",  now),
-        ("ENG-2847-008", "in-process",     "STN-02 · Crankshaft Install",     now),
+    # ─── 50 Engines ────────────────────────────────────────────────────────────
+    engines_list, locs_list, ships_list, lot_map = [], [], [], {}
+    for i in range(1, 51):
+        sn       = f"ENG-2847-{i:03d}"
+        build_ts = now - (50 - i) * 8 * 3600
+        if i <= 15:
+            status, stage = 'in-process', (i - 1) % 12
+            code, name = STATIONS[stage]
+            current_op, loc, loc_detail = f"{code} {name}", 'in-process', f"{code} · {name}"
+        elif i <= 30:
+            tc = ((i - 16) % 3) + 1
+            status, current_op = 'in-test', f"Test Cell {tc}"
+            loc, loc_detail = 'test-cell', f"Test Cell {tc} · Performance Test"
+        elif i <= 35:
+            bay = i - 30
+            status, current_op = 'shipping-hold', 'Shipping Hold'
+            loc, loc_detail = 'shipping-hold', f"Shipping Bay {bay} · Awaiting QA"
+        else:
+            cust = CUSTOMERS[(i - 36) % len(CUSTOMERS)]
+            status, current_op = 'shipped', 'SHIPPED'
+            loc, loc_detail = 'shipped', f"{cust} · Distribution Centre"
+            ships_list.append((sn, cust, now - (51-i)*DAY, f"PO-{cust[:3].upper()}-{40000+i}", f"{cust} Distribution Centre"))
+
+        # Suspect lot: engines 1-12 and 36-44 used LOT-MCR-4471
+        lot = ('LOT-MCR-4471' if (1 <= i <= 12 or 36 <= i <= 44)
+               else 'LOT-MCR-4468' if i <= 22
+               else 'LOT-MCR-4475' if i <= 38
+               else 'LOT-MCR-4480')
+        lot_map[sn] = lot
+        engines_list.append((sn, 'ISX15', build_ts, current_op, status))
+        locs_list.append((sn, loc, loc_detail, now))
+
+    conn.executemany("INSERT OR IGNORE INTO qa_engines(serial_number,product_type,build_date,current_op,status) VALUES(?,?,?,?,?)", engines_list)
+    conn.executemany("INSERT OR REPLACE INTO qa_engine_locations(serial_number,location,location_detail,updated_ts) VALUES(?,?,?,?)", locs_list)
+    conn.executemany("INSERT INTO qa_shipments(serial_number,customer,ship_date,po_number,destination) VALUES(?,?,?,?,?)", ships_list)
+
+    # ─── Material lots ─────────────────────────────────────────────────────────
+    lot_serial_map: dict = {}
+    for sn, lot in lot_map.items():
+        lot_serial_map.setdefault(lot, []).append(sn)
+    lot_meta = [
+        ('LOT-MCR-4471','Compression Piston Ring','Mahle GmbH','HEAT-MCR-8819', now-60*DAY),
+        ('LOT-MCR-4468','Compression Piston Ring','Mahle GmbH','HEAT-MCR-8815', now-75*DAY),
+        ('LOT-MCR-4475','Compression Piston Ring','Mahle GmbH','HEAT-MCR-8823', now-45*DAY),
+        ('LOT-MCR-4480','Compression Piston Ring','Mahle GmbH','HEAT-MCR-8831', now-30*DAY),
     ]
-    conn.executemany(
-        "INSERT OR REPLACE INTO qa_engine_locations(serial_number,location,location_detail,updated_ts) VALUES(?,?,?,?)",
-        locations
-    )
+    for lot_number, mat, sup, heat, recv in lot_meta:
+        conn.execute("INSERT OR IGNORE INTO qa_material_lots(lot_number,material_type,supplier,heat_number,serial_numbers,received_ts) VALUES(?,?,?,?,?,?)",
+                     (lot_number, mat, sup, heat, ','.join(lot_serial_map.get(lot_number,[])), recv))
 
-    # Shipment records — ENG-2847-006 is shipped
-    conn.execute(
-        "INSERT INTO qa_shipments(serial_number,customer,ship_date,po_number,destination) VALUES(?,?,?,?,?)",
-        ("ENG-2847-006", "Fleet Solutions Inc", now - 3*86400, "PO-FS-44821", "Chicago IL Distribution Centre")
-    )
+    # ─── Inspection results — 50 engines × up to 21 features = ~1000 rows ──────
+    insp_rows = []
+    for i, (sn, _, build_ts, _, status) in enumerate(engines_list):
+        stages_done = ((i % 12) + 1) if status == 'in-process' else 12
+        lot = lot_map[sn]
+        for s_idx, (stn_code, _) in enumerate(STATIONS[:stages_done]):
+            for feat, nominal, usl, lsl, unit in FEATURES.get(stn_code, []):
+                is_suspect = (stn_code == 'STN-03' and feat == 'Ring End Gap' and lot == 'LOT-MCR-4471')
+                tol = usl - lsl if usl > lsl else 1.0
+                if is_suspect:
+                    measured = round(_rnd.uniform(0.38, 0.56), 3)
+                elif unit in ('PASS/FAIL',):
+                    measured = 1.0 if _rnd.random() > 0.03 else 0.0
+                else:
+                    measured = round(_rnd.gauss(nominal, tol * 0.12), 4)
+                    measured = round(max(lsl - tol*0.05, min(usl + tol*0.05, measured)), 4)
+                result = 'PASS' if lsl <= measured <= usl else 'FAIL'
+                ts = build_ts + s_idx * 3600 + _rnd.randint(0, 1800)
+                insp_rows.append((sn, stn_code, feat, measured, usl, lsl, unit, result, _rnd.choice(INSPECTORS), ts))
+    conn.executemany("INSERT INTO qa_inspection_results(serial_number,station,feature,measured_value,usl,lsl,unit,result,inspector,ts) VALUES(?,?,?,?,?,?,?,?,?,?)", insp_rows)
 
-    # Material lots — LOT-MCR-4471 is the suspect piston ring batch
-    lots = [
-        ("LOT-MCR-4471", "Compression Piston Ring", "Mahle GmbH",    "HEAT-MCR-8819",
-         "ENG-2847-001,ENG-2847-002,ENG-2847-003,ENG-2847-006,ENG-2847-007", now - 5*86400),
-        ("LOT-MCR-4468", "Compression Piston Ring", "Mahle GmbH",    "HEAT-MCR-8815",
-         "ENG-2847-004,ENG-2847-005", now - 12*86400),
+    # ─── SPC data — 21 features × 30 subgroups = 630 rows ────────────────────
+    spc_rows = []
+    for stn_code, feats in FEATURES.items():
+        for feat, nominal, usl, lsl, unit in feats:
+            cpk0 = _rnd.uniform(1.25, 1.65)
+            for sg in range(1, 31):
+                is_drift = (stn_code == 'STN-03' and feat == 'Ring End Gap')
+                drift  = sg * 0.004 if is_drift else 0.0
+                xbar   = round(nominal + drift + _rnd.gauss(0, (usl-lsl)*0.04), 4)
+                r_val  = round(abs(_rnd.gauss(0, (usl-lsl)*0.08)), 4)
+                cpk    = round(max(0.1, cpk0 - sg*(0.018 if is_drift else 0.003)), 2)
+                spc_rows.append((stn_code, feat, sg, xbar, r_val, cpk, now - (30-sg)*3600))
+    conn.executemany("INSERT INTO qa_spc_data(station,feature,subgroup_id,xbar,r_value,cpk,ts) VALUES(?,?,?,?,?,?,?)", spc_rows)
+
+    # ─── Test results — ~35 engines × 5 params = 175 rows ────────────────────
+    TEST_PARAMS = [
+        ('Performance','Peak Power',    449.0,450.0,440.0,'kW'),
+        ('Performance','Peak Torque',  2049.0,2050.0,2000.0,'Nm'),
+        ('Leakage',    'Oil Consumption',0.02,0.025,0.0,'L/h'),
+        ('Vibration',  'Overall Level',  1.8, 2.0,  0.0,'g'),
+        ('Endurance',  'Run Time',       60.0,60.0, 60.0,'min'),
     ]
-    conn.executemany(
-        "INSERT OR IGNORE INTO qa_material_lots(lot_number,material_type,supplier,heat_number,serial_numbers,received_ts) VALUES(?,?,?,?,?,?)",
-        lots
-    )
+    test_rows = []
+    for sn, _, build_ts, _, status in engines_list:
+        if status in ('in-test','shipping-hold','shipped'):
+            for ttype, param, nominal, hi, lo, unit in TEST_PARAMS:
+                measured = round(_rnd.gauss(nominal, nominal * 0.008), 2)
+                result = 'PASS' if lo <= measured <= hi else 'FAIL'
+                test_rows.append((sn, ttype, param, measured, hi, unit, result, build_ts + 15*3600 + _rnd.randint(0, 3600)))
+    conn.executemany("INSERT INTO qa_test_results(serial_number,test_type,parameter,measured,limit_value,unit,result,ts) VALUES(?,?,?,?,?,?,?,?)", test_rows)
 
-    # Inspection results — Ring End Gap at STN-03 (spec 0.20–0.40mm)
-    inspections = [
-        ("ENG-2847-001", "STN-03", "Ring End Gap", 0.51, 0.40, 0.20, "mm", "FAIL", "Vision-AI", now - 2*3600),
-        ("ENG-2847-002", "STN-03", "Ring End Gap", 0.43, 0.40, 0.20, "mm", "FAIL", "Vision-AI", now - 4*3600),
-        ("ENG-2847-003", "STN-03", "Ring End Gap", 0.41, 0.40, 0.20, "mm", "FAIL", "Vision-AI", now - 5*3600),
-        ("ENG-2847-004", "STN-03", "Ring End Gap", 0.32, 0.40, 0.20, "mm", "PASS", "Vision-AI", now - 6*3600),
-        ("ENG-2847-005", "STN-03", "Ring End Gap", 0.29, 0.40, 0.20, "mm", "PASS", "Vision-AI", now - 7*3600),
-        ("ENG-2847-006", "STN-03", "Ring End Gap", 0.47, 0.40, 0.20, "mm", "FAIL", "Vision-AI", now - 3*86400),
-        ("ENG-2847-007", "STN-03", "Ring End Gap", 0.49, 0.40, 0.20, "mm", "FAIL", "Vision-AI", now - 1*3600),
+    # ─── Process params — 50 engines × 6 stations = 300 rows ─────────────────
+    param_rows = []
+    for sn, _, build_ts, _, _ in engines_list:
+        lot = lot_map[sn]
+        for s_idx, (stn_code, _) in enumerate(STATIONS[:6]):
+            coolant = (_rnd.uniform(3.0, 4.5) if (stn_code=='STN-03' and lot=='LOT-MCR-4471')
+                       else _rnd.uniform(5.5, 7.5))
+            param_rows.append((sn, stn_code, _rnd.randint(1150,1250), round(_rnd.uniform(0.07,0.09),3),
+                                round(coolant,1), round(_rnd.uniform(4.5,5.5),1),
+                                _rnd.randint(130,150), build_ts + s_idx*3600))
+    conn.executemany("INSERT INTO qa_process_params(serial_number,station,spindle_rpm,feed_mm_min,coolant_pct,coolant_lpm,cycle_time_s,ts) VALUES(?,?,?,?,?,?,?,?)", param_rows)
+
+    # ─── Operator log — 50 engines × 6 stations = 300 rows ───────────────────
+    op_rows = []
+    for sn, _, build_ts, _, _ in engines_list:
+        for s_idx, (stn_code, _) in enumerate(STATIONS[:6]):
+            op    = _rnd.choice(OPERATORS)
+            shift = _rnd.choice(['A','B','C'])
+            level = 'Level 1 — supervised required' if op == 'Mike Thornton' else f'Level {_rnd.randint(2,3)} — certified'
+            dev   = ('Running unsupervised — supervisor on break' if op=='Mike Thornton' and stn_code=='STN-03' else None)
+            op_rows.append((stn_code, sn, op, shift, level, dev, build_ts + s_idx*3600))
+    conn.executemany("INSERT INTO qa_operator_log(station,serial_number,operator_name,shift,cert_level,deviation,ts) VALUES(?,?,?,?,?,?,?)", op_rows)
+
+    # ─── Visual log — 50 engines × 3 stations = 150 rows ────────────────────
+    vis_rows = []
+    for sn, _, build_ts, _, _ in engines_list:
+        lot = lot_map[sn]
+        for s_idx, (stn_code, _) in enumerate(STATIONS[:3]):
+            suspect = stn_code == 'STN-03' and lot == 'LOT-MCR-4471'
+            findings = ('Ring gap oversize detected. Piston ring surface finish acceptable.'
+                        if suspect else 'No visual defects observed. Surface clean.')
+            result = 'FAIL' if suspect and _rnd.random() < 0.75 else 'PASS'
+            vis_rows.append((sn, stn_code, 'Vision-AI', findings, result, build_ts + s_idx*3600 + 900))
+    conn.executemany("INSERT INTO qa_visual_log(serial_number,station,inspector,findings,result,ts) VALUES(?,?,?,?,?,?)", vis_rows)
+
+    # ─── Gauge calibration — 12 gauges ────────────────────────────────────────
+    gauges = [
+        ('GAUGE-SF-01','Surface Roughness Profilometer','STN-01',now+30*DAY, 8.5,'ACCEPTABLE'),
+        ('GAUGE-RD-01','Bore Roundness CMM',            'STN-01',now+45*DAY,12.1,'ACCEPTABLE'),
+        ('GAUGE-CR-02','Crank Runout Dial Gauge',       'STN-02',now+60*DAY, 5.2,'ACCEPTABLE'),
+        ('GAUGE-RG-03','Ring End Gap Air Gauge',        'STN-03',now+5*DAY, 28.0,'MARGINAL — GR&R 28% (limit 30%)'),
+        ('GAUGE-PC-03','Pin Clearance Gauge',           'STN-03',now+90*DAY, 6.3,'ACCEPTABLE'),
+        ('GAUGE-VC-04','Valve Clearance Feeler Gauge',  'STN-04',now+20*DAY,15.0,'ACCEPTABLE'),
+        ('GAUGE-TQ-05','Torque Angle Encoder',          'STN-05',now+120*DAY,3.1,'ACCEPTABLE'),
+        ('GAUGE-FL-06','Injector Flow Bench',           'STN-06',now+15*DAY, 9.8,'ACCEPTABLE'),
+        ('GAUGE-TS-07','Turbo Shaft Dial Indicator',    'STN-07',now+75*DAY,11.2,'ACCEPTABLE'),
+        ('GAUGE-WP-08','Water Pump Flow Meter',         'STN-08',now+30*DAY, 7.5,'ACCEPTABLE'),
+        ('GAUGE-VI-09','Vision Pin Inspector',          'STN-09',now+180*DAY,2.1,'ACCEPTABLE'),
+        ('GAUGE-WG-10','Engine Weight Scale',           'STN-10',now+365*DAY,0.8,'ACCEPTABLE'),
     ]
-    conn.executemany(
-        "INSERT INTO qa_inspection_results(serial_number,station,feature,measured_value,usl,lsl,unit,result,inspector,ts) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?)", inspections
-    )
+    conn.executemany("INSERT OR IGNORE INTO qa_gauge_calibration(gauge_id,gauge_name,station,cal_due_ts,grr_pct,status) VALUES(?,?,?,?,?,?)", gauges)
 
-    # SPC data — showing upward drift over last 6 subgroups
-    spc_rows = [
-        ("STN-03", "Ring End Gap", 1, 0.27, 0.08, 1.42, now - 7*3600),
-        ("STN-03", "Ring End Gap", 2, 0.29, 0.07, 1.38, now - 6*3600),
-        ("STN-03", "Ring End Gap", 3, 0.31, 0.09, 1.31, now - 5*3600),
-        ("STN-03", "Ring End Gap", 4, 0.36, 0.10, 1.08, now - 4*3600),
-        ("STN-03", "Ring End Gap", 5, 0.42, 0.11, 0.82, now - 3*3600),
-        ("STN-03", "Ring End Gap", 6, 0.47, 0.12, 0.78, now - 2*3600),
-    ]
-    conn.executemany(
-        "INSERT INTO qa_spc_data(station,feature,subgroup_id,xbar,r_value,cpk,ts) VALUES(?,?,?,?,?,?,?)",
-        spc_rows
-    )
+    # ─── Tooling history — 12 tools (one per station) ─────────────────────────
+    all_serials = ','.join(f"ENG-2847-{j:03d}" for j in range(1,13))
+    tool_rows = []
+    for s_idx, (stn_code, _) in enumerate(STATIONS):
+        life  = 97.0 if stn_code == 'STN-03' else round(_rnd.uniform(20.0, 72.0), 1)
+        limit = 85.0 if stn_code == 'STN-03' else 80.0
+        days  = 34   if stn_code == 'STN-03' else _rnd.randint(5, 22)
+        tool_rows.append((stn_code, f'TOOL-{stn_code}-{s_idx+1:02d}', f'Cutting Tool Set {stn_code}',
+                          life, limit, days, all_serials, now))
+    conn.executemany("INSERT INTO qa_tooling_history(station,tool_id,tool_name,life_pct_at_use,change_life_limit,last_change_days_ago,serial_numbers,ts) VALUES(?,?,?,?,?,?,?,?)", tool_rows)
 
-    # Gauge calibration
-    conn.execute(
-        "INSERT OR IGNORE INTO qa_gauge_calibration(gauge_id,gauge_name,station,cal_due_ts,grr_pct,status) VALUES(?,?,?,?,?,?)",
-        ("GAUGE-RG-03", "Ring End Gap Air Gauge", "STN-03", now + 5*86400, 28.0, "MARGINAL — GR&R 28% (limit 30%)")
-    )
+    # ─── Machine maintenance — ~3 events per station = ~36 rows ───────────────
+    maint_rows = []
+    for stn_code, _ in STATIONS:
+        pm_days = 45 if stn_code == 'STN-03' else _rnd.randint(3, 28)
+        maint_rows.append((stn_code,'PM',f'Scheduled 30-day PM completed', pm_days,'completed', now-pm_days*DAY))
+        if stn_code == 'STN-03':
+            maint_rows.append((stn_code,'ALARM','Coolant system pressure low — dismissed',2,'dismissed',now-2*DAY))
+            maint_rows.append((stn_code,'ALARM','Coolant concentration 3.2% (spec 5-8%) — dismissed by operator',1,'dismissed',now-DAY))
+        elif _rnd.random() < 0.4:
+            maint_rows.append((stn_code,'ALARM',f'Temperature high alarm — acknowledged',_rnd.randint(1,5),'acknowledged',now-_rnd.randint(1,5)*DAY))
+    conn.executemany("INSERT INTO qa_machine_maintenance(station,event_type,description,days_ago,status,ts) VALUES(?,?,?,?,?,?)", maint_rows)
 
-    # Test results for ENG-2847-004 (in test cell)
-    test_rows = [
-        ("ENG-2847-004", "Performance",  "Peak Power",       449.0, 450.0, "kW",  "PASS", now - 4*3600),
-        ("ENG-2847-004", "Performance",  "Peak Torque",     2049.0, 2050.0,"Nm",  "PASS", now - 4*3600),
-        ("ENG-2847-004", "Leakage",      "Oil Consumption",  0.021, 0.025, "L/h", "PASS", now - 3*3600),
-        ("ENG-2847-004", "Vibration",    "Overall Level",    1.8,   2.0,   "g",   "PASS", now - 3*3600),
-    ]
-    conn.executemany(
-        "INSERT INTO qa_test_results(serial_number,test_type,parameter,measured,limit_value,unit,result,ts) VALUES(?,?,?,?,?,?,?,?)",
-        test_rows
-    )
-
-    # Process parameters at STN-03
-    params = [
-        ("ENG-2847-001", "STN-03", 1200, 0.08, 3.2, 4.8, 142, now - 2*3600),
-        ("ENG-2847-007", "STN-03", 1200, 0.08, 3.1, 4.7, 144, now - 1*3600),
-        ("ENG-2847-004", "STN-03", 1200, 0.08, 5.8, 8.2, 138, now - 6*3600),  # good run — different lot
-    ]
-    conn.executemany(
-        "INSERT INTO qa_process_params(serial_number,station,spindle_rpm,feed_mm_min,coolant_pct,coolant_lpm,cycle_time_s,ts) "
-        "VALUES(?,?,?,?,?,?,?,?)", params
-    )
-
-    # Tooling history — BORE-H-047 at STN-03, tool worn beyond change limit
-    conn.execute(
-        "INSERT INTO qa_tooling_history(station,tool_id,tool_name,life_pct_at_use,change_life_limit,last_change_days_ago,serial_numbers,ts) "
-        "VALUES(?,?,?,?,?,?,?,?)",
-        ("STN-03", "BORE-H-047", "CBN Hone Assembly", 97.0, 85.0, 34,
-         "ENG-2847-001,ENG-2847-002,ENG-2847-003,ENG-2847-006,ENG-2847-007", now)
-    )
-
-    # Material certs
+    # ─── Material certs ────────────────────────────────────────────────────────
     certs = [
-        ("LOT-MCR-4471", "Gray Iron ASTM A48-03 Class 30B", "Mahle GmbH",
-         "218-242 HB (spec 210-250 HB)", "As-cast — no heat treatment", 1, "CERT-MCR-2024-4471"),
-        ("LOT-MCR-4468", "Gray Iron ASTM A48-03 Class 30B", "Mahle GmbH",
-         "225-238 HB (spec 210-250 HB)", "As-cast — no heat treatment", 1, "CERT-MCR-2024-4468"),
+        ('LOT-MCR-4471','Gray Iron ASTM A48-03 Class 30B','Mahle GmbH','218-242 HB (spec 210-250 HB)','As-cast',1,'CERT-MCR-2024-4471'),
+        ('LOT-MCR-4468','Gray Iron ASTM A48-03 Class 30B','Mahle GmbH','225-238 HB (spec 210-250 HB)','As-cast',1,'CERT-MCR-2024-4468'),
+        ('LOT-MCR-4475','Gray Iron ASTM A48-03 Class 30B','Mahle GmbH','220-245 HB (spec 210-250 HB)','As-cast',1,'CERT-MCR-2024-4475'),
+        ('LOT-MCR-4480','Gray Iron ASTM A48-03 Class 30B','Mahle GmbH','215-240 HB (spec 210-250 HB)','As-cast',1,'CERT-MCR-2024-4480'),
     ]
-    conn.executemany(
-        "INSERT OR IGNORE INTO qa_material_certs(lot_number,material_spec,supplier,hardness_hb,heat_treat,chemistry_ok,cert_number) "
-        "VALUES(?,?,?,?,?,?,?)", certs
-    )
+    conn.executemany("INSERT OR IGNORE INTO qa_material_certs(lot_number,material_spec,supplier,hardness_hb,heat_treat,chemistry_ok,cert_number) VALUES(?,?,?,?,?,?,?)", certs)
 
-    # Operator log — trainee at STN-03
-    op_logs = [
-        ("STN-03", "ENG-2847-001", "Mike Thornton",  "C", "Level 1 — supervised required", "Running unsupervised — supervisor on break 21:15–22:40", now - 2*3600),
-        ("STN-03", "ENG-2847-007", "Mike Thornton",  "C", "Level 1 — supervised required", "Continued unsupervised operation", now - 1*3600),
-        ("STN-03", "ENG-2847-004", "Sarah Johnson",  "B", "Level 3 — fully certified",     None, now - 6*3600),
+    # ─── Drawings ──────────────────────────────────────────────────────────────
+    drawings = [
+        ('ISX15 Compression Ring','Ring End Gap',0.30,0.40,0.20,'mm','Rev C','CRITICAL CHARACTERISTIC — no use-as-is permitted. Oversize gap causes high oil consumption and blow-by.'),
+        ('ISX15 Crankshaft','Crank Runout',0.02,0.05,0.0,'mm','Rev B',''),
+        ('ISX15 Cylinder Block','Surface Finish',1.0,1.5,0.5,'μm','Rev D',''),
+        ('ISX15 Cylinder Head','Head Flatness',0.02,0.05,0.0,'mm','Rev C',''),
+        ('ISX15 Turbo Assembly','Turbo Shaft Play',0.11,0.15,0.08,'mm','Rev A',''),
     ]
+    conn.executemany("INSERT INTO qa_drawings(component,feature,nominal,usl,lsl,unit,revision,notes) VALUES(?,?,?,?,?,?,?,?)", drawings)
+
+    # ─── Failure knowledge graph ───────────────────────────────────────────────
     conn.executemany(
-        "INSERT INTO qa_operator_log(station,serial_number,operator_name,shift,cert_level,deviation,ts) VALUES(?,?,?,?,?,?,?)",
-        op_logs
+        "INSERT INTO qa_failure_kg(ncr_number,component,feature,defect_type,root_cause,corrective_action,closed_date,notes) VALUES(?,?,?,?,?,?,?,?)",
+        [
+            ('NCR-2023-147','ISX15 Compression Ring','Ring End Gap','ring_gap_oversize',
+             'CBN Hone BORE-H-047 at 94% life (change limit was 90%) combined with coolant concentration 3.1% (spec 5-8%). Worn hone removes less material, increasing gap.',
+             'Reduced hone life limit from 90% to 85%. Daily coolant checks. Added interlock: machine stops if coolant < 4.5%.',
+             '2023-05-02','SAME ROOT CAUSE PATTERN as current failure — tool wear + low coolant'),
+            ('NCR-2022-089','ISX15 Crankshaft','Crank Runout','crank_runout_oversize',
+             'Worn grinding centres on STN-02 machine after 45-day overdue PM.',
+             'Replaced grinding centres. Added weekly runout spot-check. PM interval enforced.',
+             '2022-08-15',''),
+            ('NCR-2024-031','ISX15 Cylinder Head','Head Flatness','flatness_oos',
+             'Thermal distortion — insufficient soak time after casting before machining.',
+             'Increased soak time 4h to 6h. Added temperature verification step.',
+             '2024-02-20',''),
+        ]
     )
 
-    # Machine maintenance — STN-03 overdue PM + coolant alarm dismissed
-    maint = [
-        ("STN-03", "PM",          "Scheduled 30-day PM completed",           45, "completed",  now - 45*86400),
-        ("STN-03", "ALARM",       "Coolant system pressure low — dismissed",  2, "dismissed",  now - 2*86400),
-        ("STN-03", "ALARM",       "Coolant concentration 3.2% (spec 5–8%) — dismissed by operator", 1, "dismissed", now - 86400),
-    ]
+    # ─── Similar components ────────────────────────────────────────────────────
     conn.executemany(
-        "INSERT INTO qa_machine_maintenance(station,event_type,description,days_ago,status,ts) VALUES(?,?,?,?,?,?)",
-        maint
-    )
-
-    # Engineering drawing
-    conn.execute(
-        "INSERT INTO qa_drawings(component,feature,nominal,usl,lsl,unit,revision,notes) VALUES(?,?,?,?,?,?,?,?)",
-        ("ISX15 Compression Ring", "Ring End Gap", 0.30, 0.40, 0.20, "mm", "Rev C",
-         "CRITICAL CHARACTERISTIC — no use-as-is permitted. Oversize gap causes high oil consumption and blow-by.")
-    )
-
-    # Failure knowledge graph — this exact failure happened in 2023
-    conn.execute(
-        "INSERT INTO qa_failure_kg(ncr_number,component,feature,defect_type,root_cause,corrective_action,closed_date,notes) "
-        "VALUES(?,?,?,?,?,?,?,?)",
-        ("NCR-2023-147", "ISX15 Compression Ring", "Ring End Gap", "ring_gap_oversize",
-         "CBN Hone BORE-H-047 at 94% life (change limit was 90%) combined with coolant concentration 3.1% (spec 5–8%). "
-         "Worn hone removes less material, increasing gap. Low coolant degrades surface finish and accelerates tool wear.",
-         "Reduced hone tool life limit from 90% to 85%. Implemented daily coolant concentration checks. "
-         "Added interlock: machine won't run if coolant concentration < 4.5%.",
-         "2023-05-02",
-         "SAME ROOT CAUSE PATTERN: tool wear + low coolant. Interlock may have been bypassed or not implemented at this station.")
-    )
-
-    # Similar components
-    conn.execute(
         "INSERT INTO qa_similar_components(component,feature,similar,notes) VALUES(?,?,?,?)",
-        ("ISX15 Compression Ring", "Ring End Gap",
-         "QSX15 Compression Ring, X15 Performance Compression Ring",
-         "All three use same ring geometry and STN-03 honing operation. If root cause is tooling/coolant at STN-03, all families affected.")
-    )
-
-    # Visual inspection log
-    conn.execute(
-        "INSERT INTO qa_visual_log(serial_number,station,inspector,findings,result,ts) VALUES(?,?,?,?,?,?)",
-        ("ENG-2847-001", "STN-03", "AI Vision System",
-         "Ring gap measurement 0.51mm. Piston ring surface finish acceptable. No visible burrs or chips.",
-         "FAIL", now - 2*3600)
+        [
+            ('ISX15 Compression Ring','Ring End Gap','QSX15 Compression Ring, X15 Performance Compression Ring',
+             'All three use same ring geometry and STN-03 honing operation. Root cause at STN-03 affects all families.'),
+            ('ISX15 Crankshaft','Crank Runout','QSX15 Crankshaft, B6.7 Crankshaft',
+             'Same grinding machine STN-02. Check sister parts if STN-02 PM overdue.'),
+        ]
     )
 
     conn.commit()
-    print("[QA] Seeded quality agent tables with demo data")
+    counts = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+              for t in ['qa_engines','qa_inspection_results','qa_spc_data','qa_test_results',
+                        'qa_visual_log','qa_process_params','qa_operator_log']}
+    total  = sum(counts.values())
+    print(f"[QA] Seeded {total} rows across qa_ tables: {counts}")
 
 
 # ── Tool implementations ──────────────────────────────────────────────────────
