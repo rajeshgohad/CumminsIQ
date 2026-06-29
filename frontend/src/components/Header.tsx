@@ -37,10 +37,10 @@ export default function Header({ connectionState, lastUpdated, activePage, onPag
         {/* Logo */}
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-cummins-blue flex items-center justify-center font-bold text-white text-lg select-none">
-            C
+            A
           </div>
           <div>
-            <p className="text-white font-semibold leading-none tracking-wide text-sm">CumminsIQ</p>
+            <p className="text-white font-semibold leading-none tracking-wide text-sm">AutomotiveIQ</p>
             <p className="text-gray-500 text-xs mt-0.5">Predictive Operations Platform</p>
           </div>
         </div>

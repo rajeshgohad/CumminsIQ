@@ -29,7 +29,7 @@ export default function App() {
           <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-500">
             <Loader2 size={36} className="animate-spin text-cummins-blue" />
             <div className="text-center">
-              <p className="text-white font-medium">Connecting to CumminsIQ Platform</p>
+              <p className="text-white font-medium">Connecting to AutomotiveIQ Platform</p>
               <p className="text-sm mt-1">Waiting for live data feed…</p>
             </div>
           </div>

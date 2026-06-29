@@ -14,7 +14,7 @@ from pm_agent_tools import run_pm_agent, init_pm_tables
 from quality_agent_tools import run_quality_agent, init_quality_tables
 from cycle_time_agent_tools import run_cycle_time_agent, init_ct_tables
 
-app = FastAPI(title="CumminsIQ API")
+app = FastAPI(title="AutomotiveIQ API")
 
 # In production set ALLOWED_ORIGINS="https://your-app.vercel.app" (comma-separated)
 _raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:4173")
@@ -99,7 +99,7 @@ async def analyze_anomaly(data: dict):
         history_summary = "No historical trend data available (station just flagged)."
 
     system_prompt = (
-        "You are an AI agent embedded in a Cummins engine assembly line monitoring system. "
+        "You are an AI agent embedded in an Automotive engine assembly line monitoring system. "
         "You receive real-time sensor telemetry and must reason like an experienced plant engineer "
         "combined with an AI diagnostician. You draw inferences — not just threshold checks. "
         "You look at trends, combinations of signals, and context to reach conclusions a simple rule cannot. "
@@ -108,7 +108,7 @@ async def analyze_anomaly(data: dict):
     )
 
     user_prompt = (
-        f"Analyze this live anomaly at station {code} on the Cummins engine assembly line.\n\n"
+        f"Analyze this live anomaly at station {code} on the Automotive engine assembly line.\n\n"
         f"STATUS: {status.upper()}\n\n"
         f"CURRENT SENSOR READINGS:\n"
         f"  Machine Temperature : {temp:.1f}°C  (warn >87°C | critical >91°C)\n"

@@ -7,7 +7,7 @@ from database import get_conn
 # ── System prompt ─────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """\
-You are a predictive maintenance agent for the Cummins Columbus IN engine assembly plant.
+You are a predictive maintenance agent for the Automotive Columbus IN engine assembly plant.
 
 ROLE: When a fault is detected on assembly equipment, schedule the optimal maintenance
 intervention that prevents unplanned failure while minimising production disruption.

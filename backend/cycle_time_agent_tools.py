@@ -8,7 +8,7 @@ from database import get_conn
 # ── System prompt ─────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """\
-You are a Cycle Time Intelligence Agent for the Cummins Columbus IN engine manufacturing plant.
+You are a Cycle Time Intelligence Agent for the Automotive Columbus IN engine manufacturing plant.
 
 GOAL: Ensure every operation runs at or better than its engineered standard cycle time.
 When it doesn't, find out exactly why, fix it, and prevent recurrence.
@@ -920,7 +920,7 @@ def _seed_ct_data(conn):
     orders = [
         ('PO-44821','Caterpillar','engine-line-2',4,2,DEADLINE_1700,'$8,000/day','active','HIGH',
          'Contractual delivery by 17:00 — 4 engines for Caterpillar dealer replenishment'),
-        ('PO-44835','Cummins Recon','engine-line-2',3,1,DEADLINE_EOD,'Contract review if 2+ misses','active','HIGH',
+        ('PO-44835','Automotive Recon','engine-line-2',3,1,DEADLINE_EOD,'Contract review if 2+ misses','active','HIGH',
          'Internal Cummins recon order — contract review clause if missed twice in quarter'),
         ('PO-44798','Peterbilt Motors','engine-line-2',5,4,DEADLINE_EOD,'$3,500/day','active','LOW',
          'Peterbilt build order — 1 engine needed, 4 already done'),
