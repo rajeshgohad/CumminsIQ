@@ -277,7 +277,7 @@ function SurfaceFinishScene({ state }: { state: InspectionState }) {
       <text x={280} y={117} fontSize="7" fill="#2060a0" fontFamily="monospace">Ra lower</text>
 
       {/* Burr anomaly highlight */}
-      {burr && state !== 'scanning' && (
+      {burr && (state === 'fail' || state === 'warn' || state === 'pass') && (
         <g>
           <ellipse cx={192} cy={104} rx={18} ry={10}
             fill="#f8717120" stroke="#f87171" strokeWidth="1" />
@@ -288,7 +288,7 @@ function SurfaceFinishScene({ state }: { state: InspectionState }) {
         </g>
       )}
 
-      {state === 'pass' && state !== 'scanning' && (
+      {state === 'pass' && (
         <g>
           <DetectionBox x={44} y={30} w={232} h={152} state="pass" label="SURFACE OK" />
           <text x={160} y={168} fontSize="8" fill="#4ade80" textAnchor="middle" fontFamily="monospace">
